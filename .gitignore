@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python cache / build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual envs (if you ever make one here)
+.venv/
+
+# VS Code workspace files (keep this local)
+.vscode/
+
+# Secrets
+.env
+
+# Optional: if data will be big/sensitive, uncomment one of these lines:
+# data/*
+# !data/.gitkeep
