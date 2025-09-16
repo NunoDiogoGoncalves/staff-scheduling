@@ -1,3 +1,15 @@
 employee,shift,day
-e1,s1,1
-e2,s2,1
+e1,cashier_morning_d3,3
+e1,cashier_morning_d6,6
+e5,cashier_evening_d1,1
+e5,cashier_morning_d2,2
+e5,cashier_evening_d4,4
+e5,cashier_evening_d5,5
+e5,cashier_evening_d6,6
+e5,cashier_evening_d7,7
+e6,cashier_morning_d1,1
+e6,cashier_evening_d2,2
+e6,cashier_evening_d3,3
+e6,cashier_morning_d4,4
+e6,cashier_morning_d5,5
+e6,cashier_morning_d7,7

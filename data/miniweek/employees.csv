@@ -1,0 +1,11 @@
+employee_id;name;type;hourly_cost
+e1;Emp1;PT25;7.57
+e2;Emp2;PT25;7.67
+e3;Emp3;FT;7.78
+e4;Emp4;FT;8.11
+e5;Emp5;PT25;7.55
+e6;Emp6;PT20;7.22
+e7;Emp7;FT;7.83
+e8;Emp8;PT25;7.86
+e9;Emp9;PT25;7.62
+e10;Emp10;PT25;7.92
