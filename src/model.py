@@ -17,18 +17,18 @@ def build_model(data):
     m.cost = Param(m.I, initialize=data['wage'], within=NonNegativeReals)
 
     # shift properties
-    m.Tj = Param(m.J, initialize=data['Tj'], within=NonNegativeIntegers)  # Length of shift j in number of intervals
-    m.Bj = Param(m.J, initialize=data['Bj'], within=NonNegativeIntegers) # Unpaid breaks in number of intervals for shift j
-    m.covers = Param(m.J, m.T, initialize=data['covers_jt'], default=0, within=Binary)  # 1 if shift j covers time interval t, 0 otherwise
-    m.job_of = Param(m.J, initialize=data['jobs_of'])  # job type of shift j
+    m.Lj = Param(m.J, initialize=data['Lj'], within=NonNegativeIntegers)  # Length of shift j in number of intervals
+    m.Bj = Param(m.J, initialize=data['unpaid'], within=NonNegativeIntegers) # Unpaid breaks in number of intervals for shift j
+    m.covers = Param(m.J, m.T, initialize=data['covers'], default=0, within=Binary)  # 1 if shift j covers time interval t, 0 otherwise
+    m.job_of = Param(m.J, initialize=data["jobs_of"], within=m.K)
 
     # availability and skills
     m.avail = Param(m.I,m.J,m.D, initialize=data['availability'], default=0, within=Binary)  # Availability of employee i for shift j on day 
     m.skill = Param(m.I, m.K, initialize=data['skills'], default=0, within=Binary)
 
     #staff target per job per day
-    m.prefReq = Param(m.K, m.D, m.T, initialize=data["pref_Rkdt"], default=0)
-    m.minReq  = Param(m.K, m.D, m.T, initialize=data["min_Rmin_kdt"], default=0)
+    m.prefReq = Param(m.K, m.D, m.T, initialize=data["pref_kdt"], default=0)
+    m.minReq  = Param(m.K, m.D, m.T, initialize=data["min_kdt"], default=0)
 
     # penalty weights (tune these)
     m.pen_pref = Param(initialize=1.0)   # weight for missing preferred staff
@@ -44,8 +44,8 @@ def build_model(data):
     # --- Objective: Minimize wage cost + penalties ---
     def obj_rule(m):
         # paid intervals per assignment = (Tj - Bj)
-        paid_intervals = sum((m.Tj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
-        wage_cost = INTERVAL_HOURS * sum(m.cost[i] * (m.Tj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
+        paid_intervals = sum((m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
+        wage_cost = INTERVAL_HOURS * sum(m.cost[i] * (m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
         # penalty terms (sum of slacks)
         pref_pen = m.pen_pref * sum(m.slack_pref[k, d, t] for k in m.K for d in m.D for t in m.T)
         min_pen  = m.pen_min  * sum(m.slack_min[k, d, t]  for k in m.K for d in m.D for t in m.T)

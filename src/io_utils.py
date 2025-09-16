@@ -8,10 +8,10 @@ def load_data(path):
     employees = []
     wage = {}
     emp_type = {}
-    with open(f"{path}/employees.csv", newline="") as f:
-        r = csv.DictReader(f)
+    with open(f"{path}/employees.csv", newline="", encoding="utf-8-sig") as f:       
+        r = csv.DictReader(f, delimiter=';')
         for row in r:
-            i = row ["id"]
+            i = row ["employees_id"]
             employees.append(i)
             wage[i] = float(row["hourly_cost"])
             emp_type[i] = row["type"]
@@ -22,48 +22,48 @@ def load_data(path):
     #jobs (from skills.scv)
     skills = defaultdict(lambda: defaultdict(int))
     jobs = set()
-    with open(f"{path}/skills.csv", newline="") as f:
-        r = csv.DictReader(f)
+    with open(f"{path}/skills.csv", newline="", encoding="utf-8-sig") as f:
+        r = csv.DictReader(f, delimiter=';')
         for row in r:
             skills[row["employee_id"]][row["job"]] = 1
             jobs.add(row["job"])
-    data['skills'] = {i:dict (skills[i]) for i in employees}
+    data['skills'] = {(i, k): skills[i][k] for i in employees for k in jobs}  
     data['jobs'] = sorted(jobs)
 
     # Load shifts - there is room for improvement here (considering days in coverage too; difference between Tj and length of shift Lj)
     shifts = []
     job_of = {}
     start_j = {}
-    Tj = {}
+    Lj = {}
     unpaid = {}
     covers = defaultdict(lambda: defaultdict(int)) #covers [j][t] =1
     days = set()
     intervals = set()
 
-    with open(f"{path}/shifts.csv", newline="") as f:
-        r = csv.DictReader(f)
+    with open(f"{path}/shifts.csv", newline="", encoding="utf-8-sig") as f:
+        r = csv.DictReader(f, delimiter=';')
         for row in r:
             j = row["shift_id"];d = int(row["day"])
-            k = row["job"];s = int(row["start_t"]);L = int(row["Length Tj"])
+            k = row["job"];s = int(row["start_t"]);L = int(row["length"])
             b = int(row["unpaid_breaks_Bj"])
             shifts.append(j); days.add(d)
-            job_of[j] = k; start_j[j] = s; Tj[j] = L; unpaid[j] = b
+            job_of[j] = k; start_j[j] = s; Lj[j] = L; unpaid[j] = b
             for t in range(s, s+L):
                 covers[j][t] = 1
                 intervals.add(t)
     data['shifts'] = shifts
     data['jobs_of'] = job_of
-    data[intervals] = sorted(intervals)
-    data[days] = sorted(days)
+    data['intervals'] = sorted(intervals)
+    data['days'] = sorted(days)
     data['start_j'] = start_j
-    data['Tj'] = Tj
+    data['Lj'] = Lj
     data['unpaid'] = unpaid
     data['covers'] = { (j,t): covers[j][t] for j in shifts for t in intervals }
 
     # Load availability
     avail = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    with open(f"{path}/availability.csv", newline="") as f:
-        r = csv.DictReader(f)
+    with open(f"{path}/availability.csv", newline="", encoding="utf-8-sig") as f:
+        r = csv.DictReader(f, delimiter=';')
         for row in r:
             avail[row["employee_id"]][row["shift_id"]][int(row["day"])] = int (row["available"])
     data['availability'] = { (i,j,d): avail[i][j][d] for i in employees for j in shifts for d in data["days"] }
@@ -71,16 +71,16 @@ def load_data(path):
 
     # Load demand
     pref = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    minr =  defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    with open(f"{path}/demand.csv", newline="") as f:
-        r = csv.DictReader(f)
+    min =  defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    with open(f"{path}/demand.csv", newline="", encoding="utf-8-sig") as f:
+        r = csv.DictReader(f, delimiter=';')
         for row in r:
             d = int(row["day"]); t= int(row["t"]); k = row["job"]
-            pref [k][t][d] = int(row["preferred"])
-            minr[k][t][d] = int(row["min"])
+            pref [k][d][t] = int(row["preferred"])
+            min [k][d][t] = int(row["min"])
             intervals.add(t)
-    data["pref_Rkdt"] = { (k,t,d): pref[k][t][d] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
-    data["min_Rmin_kdt"] = { (k,d,t): minr[k][d][t] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
+    data["pref_kdt"] = { (k,d,t): pref[k][d][t] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
+    data["min_kdt"] = { (k,d,t): min[k][d][t] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
 
     # employee subsets (FT / PT20 / PT25) used by constraints (16–20) in your PDF
     data["FT"] = [i for i,t in emp_type.items() if t=="FT"]
