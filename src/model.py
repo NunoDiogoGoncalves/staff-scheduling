@@ -30,9 +30,18 @@ def build_model(data):
     m.prefReq = Param(m.K, m.D, m.T, initialize=data["pref_kdt"], default=0)
     m.minReq  = Param(m.K, m.D, m.T, initialize=data["min_kdt"], default=0)
 
+    # ----- compute a safe penalty for minimum understaffing -----
+    #INTERVAL_HOURS = 0.5
+    #max_wage = max(data["wage"].values())
+    #max_paid_intervals = max(data["Tj"][j] - data["Bj"][j] for j in data["shifts"])
+    # Upper bound on the total cost of assigning any single shift
+    #upper_shift_cost = max_wage * INTERVAL_HOURS * max_paid_intervals
+    # Make paying 1 unit of min-slack more expensive than adding any single shift
+    #data["pen_min"] = upper_shift_cost * 2.0
+
     # penalty weights (tune these)
-    m.pen_pref = Param(initialize=1.0)   # weight for missing preferred staff
-    m.pen_min  = Param(initialize=10.0)  # weight for missing minimum staff (should be >> pen_pref)
+    m.pen_pref = Param(initialize=data["pen_pref"])
+    m.pen_min  = Param(initialize=data["pen_min"])
 
     # --- Decision Variables ---
     m.x = Var(m.I, m.J, m.D, within=Binary)

@@ -93,4 +93,35 @@ def print_objective_breakdown(m):
     print(f"  Minimum pen    = {min_pen:.2f}")
     print(f"  TOTAL objective= {total:.2f}\n")
 
+    # Build a list of (k,d,t, slack_min, assigned, min_req)
+    hotspots = []
+    for k in m.K:
+        for d in m.D:
+            for t in m.T:
+                assigned = sum(value(m.covers[j, t]) * value(m.x[i, j, d])
+                            for i in m.I for j in m.J if value(m.job_of[j]) == k)
+                smin = value(m.slack_min[k, d, t])
+                if smin > 0.0:
+                    hotspots.append((
+                        str(k), int(d), int(t),
+                        int(smin), int(assigned), int(value(m.minReq[k, d, t]))
+                    ))
+
+    # Sort by biggest min-slack, then by day, then interval
+    hotspots.sort(key=lambda r: (-r[3], r[1], r[2]))
+
+    # Write CSV
+    with open("data/hotspots.csv", "w") as f:
+        f.write("job,day,interval,slack_min,assigned,min_req\n")
+        for k,d,t,smin,assigned,minreq in hotspots:
+            f.write(f"{k},{d},{t},{smin},{assigned},{minreq}\n")
+
+    # Quick terminal summary (top 10)
+    print("\nTop unmet MIN intervals (hotspots):")
+    for row in hotspots[:10]:
+        k,d,t,smin,assigned,minreq = row
+        print(f"  {k} d{d} t{t}: missing {smin} (assigned {assigned} vs min {minreq})")
+    print("Wrote data/hotspots.csv\n")
+
+
 print_objective_breakdown(m)

@@ -48,7 +48,7 @@ def load_data(path):
             b = int(row["unpaid_breaks_Bj"])
             shifts.append(j); days.add(d)
             job_of[j] = k; start_j[j] = s; Lj[j] = L; unpaid[j] = b
-            for t in range(s, s+L):
+            for t in range(s, s+L+1):
                 covers[j][t] = 1
                 intervals.add(t)
     data['shifts'] = shifts
@@ -87,5 +87,16 @@ def load_data(path):
     data["PT20"] = [i for i,t in emp_type.items() if t=="PT20"]
     data["PT25"] = [i for i,t in emp_type.items() if t=="PT25"]
     data["PT"] = data["PT20"] + data["PT25"]
-    
+
+    # ----- compute a safe penalty for minimum understaffing -----
+    INTERVAL_HOURS = 0.5
+    max_wage = max(data["wage"].values())
+    max_paid_intervals = max(data["Lj"][j] - data["unpaid"][j] for j in data["shifts"])
+    # Upper bound on the total cost of assigning any single shift
+    upper_shift_cost = max_wage * INTERVAL_HOURS * max_paid_intervals
+    # Make paying 1 unit of min-slack more expensive than adding any single shift
+    data["pen_min"] = 10e6 #upper_shift_cost * 2.0
+    # Keep preferred penalty small (nice-to-have)
+    data["pen_pref"] = 1.0
+        
     return data
