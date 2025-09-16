@@ -28,7 +28,6 @@ def load_data(path):
             skills[row["employee_id"]][row["job"]] = 1
             jobs.add(row["job"])
     data['skills'] = {(i, k): skills[i][k] for i in employees for k in jobs}
-    print (data['skills'])
     data['jobs'] = sorted(jobs)
 
     # Load shifts - there is room for improvement here (considering days in coverage too; difference between Tj and length of shift Lj)
@@ -40,6 +39,8 @@ def load_data(path):
     covers = defaultdict(lambda: defaultdict(int)) #covers [j][t] =1
     days = set()
     intervals = set()
+    intervals_from_covers = set()
+
 
     with open(f"{path}/shifts.csv", newline="", encoding="utf-8-sig") as f:
         r = csv.DictReader(f, delimiter=';')
@@ -52,9 +53,10 @@ def load_data(path):
             for t in range(s, s+L+1):
                 covers[j][t] = 1
                 intervals.add(t)
+                intervals_from_covers.add(t)
     data['shifts'] = shifts
     data['jobs_of'] = job_of
-    data['intervals'] = sorted(intervals)
+    data 
     data['days'] = sorted(days)
     data['start_j'] = start_j
     data['Lj'] = Lj
@@ -71,6 +73,7 @@ def load_data(path):
 
 
     # Load demand
+    intervals_from_demand = set()
     pref = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     min =  defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     with open(f"{path}/demand.csv", newline="", encoding="utf-8-sig") as f:
@@ -80,8 +83,11 @@ def load_data(path):
             pref [k][d][t] = int(row["preferred"])
             min [k][d][t] = int(row["min"])
             intervals.add(t)
+            intervals_from_demand.add(t)
+    data["intervals"] = sorted(intervals_from_covers | intervals_from_demand)
     data["pref_kdt"] = { (k,d,t): pref[k][d][t] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
     data["min_kdt"] = { (k,d,t): min[k][d][t] for k in data["jobs"] for d in data["days"] for t in data["intervals"] }
+
 
     # employee subsets (FT / PT20 / PT25) used by constraints (16–20) in your PDF
     data["FT"] = [i for i,t in emp_type.items() if t=="FT"]
@@ -98,7 +104,7 @@ def load_data(path):
     # Make paying 1 unit of min-slack more expensive than adding any single shift
     data["pen_min"] = 10e6 #upper_shift_cost * 2.0
     # Keep preferred penalty small (nice-to-have)
-    data["pen_pref"] = 1.0
+    data["pen_pref"] = 10.0
 
 
     # ----- Build sparse candidate set X = {(i,j,d) that are feasible} -----

@@ -3,7 +3,7 @@ from pyomo.environ import value
 from io_utils import load_data
 from model import build_model
 
-data = load_data("data")
+data = load_data("data/miniweek")
 
 def debug_data(data):
     print("\n--- SANITY COUNTS ---")
