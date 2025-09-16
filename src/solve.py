@@ -5,6 +5,37 @@ from model import build_model
 
 data = load_data("data")
 
+def debug_data(data):
+    print("\n--- SANITY COUNTS ---")
+    print("employees:", len(data.get("employees", [])))
+    print("jobs:", len(data.get("jobs", [])))
+    print("days:", len(data.get("days", [])))
+    print("intervals:", len(data.get("intervals", [])))
+    print("shifts:", len(data.get("shifts", [])))
+    print("availability entries:", len(data.get("availability", {})))
+    print("skills employees:", len(data.get("skills", {})))
+    print("job_of_j entries:", len(data.get("jobs_of", {})))
+    print("covers entries:", len(data.get("covers", {})))
+
+    # sample a few entries
+    print("\n--- SAMPLE AVAIL (first 5 where value==1) ---")
+    c = 0
+    for k,v in data.get("availability", {}).items():
+        if v == 1:
+            print("avail 1:", k)
+            c += 1
+            if c >= 5: break
+
+    print("\n--- SAMPLE SKILLS FOR FIRST EMP ---")
+    skills_for_i = {k:v for (ii,k),v in data["skills"].items() if ii == "e1"}
+    print("e1 skills:", skills_for_i)
+
+    print("\n--- SAMPLE job_of ---")
+    for j in data.get("shifts", [])[:5]:
+        print(j, "->", data.get("jobs_of", {}).get(j))
+
+#debug_data(data)
+
 def sanity_check(data):
     required = ["employees","jobs","days","intervals","shifts",
                 "wage","skills","availability","jobs_of","covers",
@@ -48,17 +79,17 @@ result = solver.solve(m, tee=True)
 
 
 # 1) Write assignments to CSV
+# Assignments
 asgn = []
-for i in m.I:
-    for j in m.J:
-        for d in m.D:
-            if value(m.x[i, j, d]) > 0.5:
-                asgn.append((i, j, d))
+for (i, j, d) in m.X:                      # <-- only iterate existing variables
+    if value(m.x[i, j, d]) > 0.5:
+        asgn.append((i, j, d))
 
 with open("data/solution_assignments.csv", "w") as f:
     f.write("employee,shift,day\n")
     for i, j, d in asgn:
         f.write(f"{i},{j},{d}\n")
+
 print("Wrote data/solution_assignments.csv")
 
 # 2) Write slack / coverage to CSV
@@ -67,8 +98,11 @@ with open("data/shortfalls.csv", "w") as f:
     for k in m.K:
         for d in m.D:
             for t in m.T:
-                assigned = sum(value(m.covers[j, t]) * value(m.x[i, j, d])
-                               for i in m.I for j in m.J if value(m.job_of[j]) == k)
+                assigned = sum(
+                    value(m.covers[j, t]) * value(m.x[i, j, dd])
+                    for (i, j, dd) in m.X
+                    if dd == d and value(m.job_of[j]) == k
+                )
                 f.write(
                     f"{k},{d},{t},"
                     f"{int(assigned)},"
@@ -80,41 +114,51 @@ with open("data/shortfalls.csv", "w") as f:
 print("Wrote data/shortfalls.csv")
 
 def print_objective_breakdown(m):
-    from pyomo.environ import value
-    INTERVAL_HOURS = 0.5
-    wage_cost = sum(value(m.cost[i]) * (value(m.Lj[j]) - value(m.Bj[j])) * value(m.x[i, j, d]) * INTERVAL_HOURS
-                    for i in m.I for j in m.J for d in m.D)
-    pref_pen = value(m.pen_pref) * sum(value(m.slack_pref[k, d, t]) for k in m.K for d in m.D for t in m.T)
-    min_pen  = value(m.pen_min)  * sum(value(m.slack_min[k, d, t])  for k in m.K for d in m.D for t in m.T)
-    total    = wage_cost + pref_pen + min_pen
-    print(f"\nObjective breakdown:")
-    print(f"  Wage cost      = {wage_cost:.2f}")
-    print(f"  Preferred pen  = {pref_pen:.2f}")
-    print(f"  Minimum pen    = {min_pen:.2f}")
-    print(f"  TOTAL objective= {total:.2f}\n")
+    INTERVAL_HOURS = 0.5  # or whatever your interval length is
+
+    wage_cost = sum(
+        value(m.cost[i]) * (value(m.Lj[j]) - value(m.Bj[j])) * value(m.x[i, j, d]) * INTERVAL_HOURS
+        for (i, j, d) in m.X
+    )
+
+    penalty_min = sum(
+        value(m.pen_min) * value(m.slack_min[k, d, t])
+        for k in m.K for d in m.D for t in m.T
+    )
+
+    penalty_pref = sum(
+        value(m.pen_pref) * value(m.slack_pref[k, d, t])
+        for k in m.K for d in m.D for t in m.T
+    )
+
+    print(f"Wage cost: {wage_cost:.2f}")
+    print(f"Penalty min: {penalty_min:.2f}")
+    print(f"Penalty pref: {penalty_pref:.2f}")
+    print(f"Total objective: {wage_cost + penalty_min + penalty_pref:.2f}")
+
 
     # Build a list of (k,d,t, slack_min, assigned, min_req)
     hotspots = []
     for k in m.K:
         for d in m.D:
             for t in m.T:
-                assigned = sum(value(m.covers[j, t]) * value(m.x[i, j, d])
-                            for i in m.I for j in m.J if value(m.job_of[j]) == k)
-                smin = value(m.slack_min[k, d, t])
-                if smin > 0.0:
-                    hotspots.append((
-                        str(k), int(d), int(t),
-                        int(smin), int(assigned), int(value(m.minReq[k, d, t]))
-                    ))
+                assigned = sum(
+                    value(m.covers[j, t]) * value(m.x[i, j, dd])
+                    for (i, j, dd) in m.X
+                    if dd == d and value(m.job_of[j]) == k
+                )
+                smin = int(value(m.slack_min[k, d, t]))
+                if smin > 0:
+                    hotspots.append((str(k), int(d), int(t), smin, int(assigned), int(value(m.minReq[k,d,t]))))
 
-    # Sort by biggest min-slack, then by day, then interval
     hotspots.sort(key=lambda r: (-r[3], r[1], r[2]))
 
-    # Write CSV
     with open("data/hotspots.csv", "w") as f:
         f.write("job,day,interval,slack_min,assigned,min_req\n")
-        for k,d,t,smin,assigned,minreq in hotspots:
-            f.write(f"{k},{d},{t},{smin},{assigned},{minreq}\n")
+        for row in hotspots:
+            f.write(",".join(map(str, row)) + "\n")
+
+    print("Wrote data/hotspots.csv")
 
     # Quick terminal summary (top 10)
     print("\nTop unmet MIN intervals (hotspots):")

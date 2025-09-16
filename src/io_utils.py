@@ -11,7 +11,7 @@ def load_data(path):
     with open(f"{path}/employees.csv", newline="", encoding="utf-8-sig") as f:       
         r = csv.DictReader(f, delimiter=';')
         for row in r:
-            i = row ["employees_id"]
+            i = row ["employee_id"]
             employees.append(i)
             wage[i] = float(row["hourly_cost"])
             emp_type[i] = row["type"]
@@ -27,7 +27,8 @@ def load_data(path):
         for row in r:
             skills[row["employee_id"]][row["job"]] = 1
             jobs.add(row["job"])
-    data['skills'] = {(i, k): skills[i][k] for i in employees for k in jobs}  
+    data['skills'] = {(i, k): skills[i][k] for i in employees for k in jobs}
+    print (data['skills'])
     data['jobs'] = sorted(jobs)
 
     # Load shifts - there is room for improvement here (considering days in coverage too; difference between Tj and length of shift Lj)
@@ -98,5 +99,29 @@ def load_data(path):
     data["pen_min"] = 10e6 #upper_shift_cost * 2.0
     # Keep preferred penalty small (nice-to-have)
     data["pen_pref"] = 1.0
+
+
+    # ----- Build sparse candidate set X = {(i,j,d) that are feasible} -----
+    # Conditions we’ll enforce now (filter out impossible triplets):
+    #  - employee has skill for job_of_j[j]
+    #  - employee is available for (j,d)
+
+    X = []
+    for i in data["employees"]:
+        si = data["skills"].get(i, {})
+        for j in data["shifts"]:
+            k = data["jobs_of"][j] #job required for shift j
+            has_skill = data["skills"].get((i, k), 0)
+            if not has_skill:
+                continue       
+            for d in data["days"]:
+                a = data["availability"].get((i, j, d), 0)
+                if a == 1 :
+                    X.append((i, j, d))
+
+    # Store it
+    data["X"] = X
+
+
         
     return data

@@ -12,6 +12,9 @@ def build_model(data):
     m.T = Set(initialize=data['intervals']) #time intervals
     m.K = Set(initialize=data['jobs']) #jobs
 
+    # sparse candidate set for variables
+    m.X = Set(dimen=3, initialize=data["X"])  # each element is a tuple (i,j,d)
+
     # --- Parameters ---
     # wage cost per hour per employee
     m.cost = Param(m.I, initialize=data['wage'], within=NonNegativeReals)
@@ -43,8 +46,8 @@ def build_model(data):
     m.pen_pref = Param(initialize=data["pen_pref"])
     m.pen_min  = Param(initialize=data["pen_min"])
 
-    # --- Decision Variables ---
-    m.x = Var(m.I, m.J, m.D, within=Binary)
+    # Decision variable only on feasible triplets
+    m.x = Var(m.X, domain=Binary)
 
     # slack variables for unmet staffing (non-negative integers are fine)
     m.slack_pref = Var(m.K, m.D, m.T, domain=NonNegativeIntegers)
@@ -53,8 +56,8 @@ def build_model(data):
     # --- Objective: Minimize wage cost + penalties ---
     def obj_rule(m):
         # paid intervals per assignment = (Tj - Bj)
-        paid_intervals = sum((m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
-        wage_cost = INTERVAL_HOURS * sum(m.cost[i] * (m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for i in m.I for j in m.J for d in m.D)
+        paid_intervals = sum((m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for (i, j, d) in m.X)
+        wage_cost = INTERVAL_HOURS * sum(m.cost[i] * (m.Lj[j] - m.Bj[j]) * m.x[i, j, d] for (i, j, d) in m.X)
         # penalty terms (sum of slacks)
         pref_pen = m.pen_pref * sum(m.slack_pref[k, d, t] for k in m.K for d in m.D for t in m.T)
         min_pen  = m.pen_min  * sum(m.slack_min[k, d, t]  for k in m.K for d in m.D for t in m.T)
@@ -66,35 +69,42 @@ def build_model(data):
 
     # (1) Availability: you can only assign if available
     def avail_rule(m, i, j, d):
-        return m.x[i,j,d] <= m.avail[i,j,d]
-    m.avail_constr = Constraint(m.I, m.J, m.D, rule=avail_rule)
+        if (i, j, d) not in m.X:   # variable doesn’t exist → skip
+            return Constraint.Skip
+        return m.x[i, j, d] <= m.avail[i, j, d]
+    m.Availability = Constraint(m.X, rule=avail_rule)
 
-      # (2) Skill: you can only assign shift j if employee i has the skill for job k(j)
     def skill_rule(m, i, j, d):
-        k = data['jobs_of'][j]
-        return m.x[i,j,d] <= m.skill[i ,k]
-    m.skill_constr = Constraint(m.I, m.J, m.D, rule=skill_rule)
+        if (i, j, d) not in m.X:
+            return Constraint.Skip
+        k = m.job_of[j]
+        return m.x[i, j, d] <= m.skill[i, k]
+    m.SkillOK = Constraint(m.X,rule=skill_rule)
     
 
     # (15) One shift per day per employee
-    def one_shift_rule(m, i, d):
-        return sum(m.x[i,j,d] for j in m.J) <= 1
-    m.one_shift_constr = Constraint(m.I, m.D, rule=one_shift_rule)
+    def one_per_day(m, i, d):
+        vars_today = [m.x[ii, j, dd] for (ii, j, dd) in m.X if ii == i and dd == d]
+        if vars_today:
+            return sum(vars_today) <= 1
+        else:
+            return Constraint.Skip   # no feasible shifts → skip constraint
+    m.OneShiftPerDay = Constraint(m.I, m.D, rule=one_per_day)
 
     # helper: how many workers assigned to job k at (d, t)
     def assigned_kdt(m, k, d, t):
-        # count all employees assigned to any shift j that:
-        #   (a) belongs to job k, and (b) covers interval t on day d
-        return sum(m.covers[j, t] * m.x[i, j, d] for i in m.I for j in m.J if m.job_of[j] == k)
+    # count employees assigned on (d) to any shift j of job k that covers t
+        return sum(m.covers[j, t] * m.x[i, j, dd] for (i, j, dd) in m.X if dd == d and m.job_of[j] == k)
 
     # (30) Preferred staffing: assigned + slack_pref >= preferred demand
     def preferred_staffing(m, k, d, t):
         return assigned_kdt(m, k, d, t) + m.slack_pref[k, d, t] >= m.prefReq[k, d, t]
-    m.prefered_staff_constraint = Constraint(m.K, m.D, m.T, rule=preferred_staffing)
+    m.Preferred = Constraint(m.K, m.D, m.T, rule=preferred_staffing)
+
 
     # (31) Minimum staffing: assigned + slack_min >= minimum demand
     def minimum_staffing(m, k, d, t):
         return assigned_kdt(m, k, d, t) + m.slack_min[k, d, t] >= m.minReq[k, d, t]
-    m.minimum_staff_constraint = Constraint(m.K, m.D, m.T, rule=minimum_staffing)
+    m.Minimum = Constraint(m.K, m.D, m.T, rule=minimum_staffing)
 
     return m
